@@ -257,14 +257,18 @@
         grid.appendChild(node);
       });
     }
-
+    const STORAGE_KEY = "simple-store-products-v1";
     function openAdd(){
+      const pass = prompt("ادخل كلمة السر لإضافة المنتج:");
+      if(pass !== "mySecret123") return alert("كلمة السر خاطئة!");
+      
       editIndex = null;
       modalTitle.textContent = "إضافة منتج";
       form.reset();
       preview.innerHTML = '<span class="muted">معاينة الصورة تظهر هنا</span>';
       modal.showModal();
     }
+
     function openEdit(i){
       editIndex = i;
       const p = products[i];
@@ -361,3 +365,4 @@
   </script>
 </body>
 </html>
+
