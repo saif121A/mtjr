@@ -55,7 +55,6 @@
     .specs{white-space:pre-wrap; font-size:14px; color:#d1d5db}
     .actions{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
     .footer{opacity:.7; font-size:12px; text-align:center; padding:24px 0}
-    /* الحوار (المودال) */
     dialog{
       border:none; border-radius:16px; padding:0; width:min(720px,94vw); background:#0b1224; color:var(--text); box-shadow: var(--shadow); 
     }
@@ -85,6 +84,7 @@
     <div class="wrap bar">
       <h1>متجري</h1>
       <div class="controls">
+        <button class="btn-secondary" id="loginAdminBtn">تسجيل دخول المسؤول</button>
         <button class="btn-secondary" id="addBtn">إضافة منتج</button>
         <button class="btn" id="exportBtn">تصدير البيانات</button>
         <label class="btn" for="importFile" style="cursor:pointer">استيراد بيانات</label>
@@ -105,7 +105,6 @@
     صنع بالحب — زر الشراء يفتح واتساب على <span class="badge">+968 9437 0488</span>
   </footer>
 
-  <!-- نافذة إضافة/تعديل -->
   <dialog id="productModal">
     <form method="dialog" id="productForm">
       <div class="modal-head">
@@ -178,11 +177,9 @@
   </template>
 
   <script>
-    // ===== الإعدادات =====
-    const WHATSAPP_NUMBER = "96894370488"; // بدون + حسب تعليمات واتساب
+    const WHATSAPP_NUMBER = "96894370488";
     const STORAGE_KEY = "simple-store-products-v1";
 
-    // ===== عناصر DOM =====
     const grid = document.getElementById('productsGrid');
     const emptyState = document.getElementById('emptyState');
     const tpl = document.getElementById('cardTpl');
@@ -204,12 +201,12 @@
     const clearBtn = document.getElementById('clearBtn');
     const resetBtn = document.getElementById('resetBtn');
     const saveBtn = document.getElementById('saveBtn');
+    const loginAdminBtn = document.getElementById('loginAdminBtn');
 
-    // ===== الحالة =====
     let products = loadProducts();
-    let editIndex = null; // null = إضافة
+    let editIndex = null;
+    let isAdmin = false; // المسؤول
 
-    // ===== وظائف مساعدة =====
     function loadProducts(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -225,9 +222,17 @@
       const msg = `السلام عليكم 👋\nأرغب بشراء المنتج التالي:\n• ${p.title}\n• السعر: ${p.price} ر.ع\nرابط الصورة: ${p.image ?? ""}\nهل متوفر؟`;
       return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
     }
+
+    function updateControls(){
+      addBtn.style.display = isAdmin ? "inline-flex" : "none";
+      clearBtn.style.display = isAdmin ? "inline-flex" : "none";
+      document.querySelectorAll('.edit').forEach(btn => btn.style.display = isAdmin ? "inline-flex" : "none");
+      document.querySelectorAll('.del').forEach(btn => btn.style.display = isAdmin ? "inline-flex" : "none");
+    }
+
     function render(){
       grid.innerHTML = "";
-      if(!products.length){ emptyState.hidden = false; return }
+      if(!products.length){ emptyState.hidden = false; updateControls(); return }
       emptyState.hidden = true;
       products.forEach((p,idx)=>{
         const node = tpl.content.cloneNode(true);
@@ -247,7 +252,6 @@
         pr.textContent = currency(p.price || 0);
         sp.textContent = p.specs || "";
         buy.href = whatsappLink(p);
-        buy.addEventListener('click', ()=>{ /* nothing extra */ });
 
         edit.addEventListener('click', ()=> openEdit(idx));
         del.addEventListener('click', ()=>{
@@ -256,12 +260,10 @@
 
         grid.appendChild(node);
       });
+      updateControls();
     }
-    const STORAGE_KEY = "simple-store-products-v1";
+
     function openAdd(){
-      const pass = prompt("ادخل كلمة السر لإضافة المنتج:");
-      if(pass !== "mySecret123") return alert("كلمة السر خاطئة!");
-      
       editIndex = null;
       modalTitle.textContent = "إضافة منتج";
       form.reset();
@@ -292,8 +294,17 @@
       });
     }
 
-    // ===== أحداث عامة =====
-    addBtn.addEventListener('click', openAdd);
+    // ===== أحداث =====
+    loginAdminBtn.addEventListener('click', ()=>{
+      const pass = prompt("ادخل كلمة السر للمسؤول:");
+      if(pass === "admin123"){
+        isAdmin = true;
+        alert("تم الدخول كمسؤول ✅");
+        updateControls();
+      } else alert("كلمة السر خاطئة!");
+    });
+
+    addBtn.addEventListener('click', ()=>{ if(isAdmin) openAdd(); });
     resetBtn.addEventListener('click', ()=>{ form.reset(); preview.innerHTML = '<span class="muted">معاينة الصورة تظهر هنا</span>'; });
     imageFileEl.addEventListener('change', async (e)=>{
       const f = e.target.files?.[0];
@@ -308,29 +319,44 @@
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
       saveBtn.disabled = true;
-      // جهز الصورة
-      let image = "";
-      if(imageFileEl.files && imageFileEl.files[0]){
-        image = await readImageFile(imageFileEl.files[0]); // base64
-      }else if(imageUrlEl.value.trim()){
-        image = imageUrlEl.value.trim();
-      }
-      const item = {
-        title: titleEl.value.trim(),
-        price: Number(priceEl.value),
-        specs: specsEl.value.trim(),
-        tags: tagsEl.value.split(/,|،/).map(s=>s.trim()).filter(Boolean),
-        image
-      };
-      if(editIndex===null){ products.unshift(item); }
-      else{ products[editIndex] = item; }
+      try{
+        if(!titleEl.value.trim()) return alert("ادخل اسم المنتج!");
+        if(!priceEl.value || Number(priceEl.value)<0) return alert("ادخل سعر صحيح!");
 
-      persist(); render();
-      modal.close();
-      saveBtn.disabled = false;
+        let image = "";
+        if(imageFileEl.files && imageFileEl.files[0]){
+          image = await readImageFile(imageFileEl.files[0]);
+        }else if(imageUrlEl.value.trim()){
+          image = imageUrlEl.value.trim();
+        }
+
+        const item = {
+          title: titleEl.value.trim(),
+          price: Number(priceEl.value),
+          specs: specsEl.value.trim(),
+          tags: tagsEl.value.split(/,|،/).map(s=>s.trim()).filter(Boolean),
+          image
+        };
+
+        if(editIndex===null){
+          products.unshift(item); // أضف في البداية
+        } else {
+          products[editIndex] = item; // تعديل
+        }
+
+        persist(); // احفظ في localStorage
+        render();  // عرض المنتجات
+        modal.close(); 
+      } catch(err){
+        console.error(err);
+        alert("حدث خطأ أثناء الحفظ");
+      } finally{
+        saveBtn.disabled = false;
+      }
     });
 
     exportBtn.addEventListener('click', ()=>{
+      if(!isAdmin) return alert("لا يمكنك تصدير البيانات بدون صلاحيات المسؤول!");
       const blob = new Blob([JSON.stringify(products,null,2)], {type:"application/json"});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -339,6 +365,7 @@
     });
 
     importFile.addEventListener('change', ()=>{
+      if(!isAdmin) return alert("لا يمكنك استيراد البيانات بدون صلاحيات المسؤول!");
       const f = importFile.files?.[0];
       if(!f) return;
       const reader = new FileReader();
@@ -357,6 +384,7 @@
     });
 
     clearBtn.addEventListener('click', ()=>{
+      if(!isAdmin) return alert("لا يمكنك حذف المنتجات بدون صلاحيات المسؤول!");
       if(confirm("هل أنت متأكد من حذف جميع المنتجات؟")){ products = []; persist(); render(); }
     });
 
@@ -365,4 +393,3 @@
   </script>
 </body>
 </html>
-
